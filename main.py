@@ -1,14 +1,27 @@
+import os
 import requests
 import json
 from datetime import datetime
 import time
 import schedule
+import google.generativeai as genai
 
-# --- CONFIGURACIÓN CENTRAL ---
-GUMROAD_TOKEN = "PONE_ACÁ_TU_GUMROAD_TOKEN"
-ID_INSTANCE = "PONE_ACÁ_TU_ID_INSTANCE"
-API_TOKEN = "PONE_ACÁ_TU_API_TOKEN"
-CHAT_ID = "PONE_ACÁ_TU_CHAT_ID"  # ejemplo: "120363406798223965@g.us"
+# --- CONFIGURACIÓN CENTRAL DESDE ENV (RAILWAY) ---
+# En Railway definí estas variables de entorno:
+# GUMROAD_TOKEN, GREENAPP_ID_INSTANCE, GREENAPP_API_TOKEN, GREENAPP_CHAT_ID, GEMINI_API_KEY
+
+GUMROAD_TOKEN = os.getenv("GUMROAD_TOKEN")
+ID_INSTANCE = os.getenv("GREENAPP_ID_INSTANCE")
+API_TOKEN = os.getenv("GREENAPP_API_TOKEN")
+CHAT_ID = os.getenv("GREENAPP_CHAT_ID")  # ej: "120363406798223965@g.us"
+
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+
+# Configurar Gemini
+if not GEMINI_API_KEY:
+    raise ValueError("Falta GEMINI_API_KEY en variables de entorno.")
+genai.configure(api_key=GEMINI_API_KEY)
+model = genai.GenerativeModel("gemini-1.5-flash")
 
 
 def generar_barra(porcentaje, longitud=10):
@@ -21,6 +34,9 @@ def generar_barra(porcentaje, longitud=10):
 
 
 def obtener_datos_gumroad():
+    if not GUMROAD_TOKEN:
+        raise ValueError("Falta GUMROAD_TOKEN en variables de entorno.")
+
     headers = {"Authorization": f"Bearer {GUMROAD_TOKEN}"}
 
     res_p = requests.get("https://api.gumroad.com/v2/products", headers=headers)
@@ -67,12 +83,16 @@ def construir_reporte(productos, ventas_data):
                 errores_render.append("Portada Principal")
 
             if errores_render:
-                tareas_alberto_detalle.append(f"{nombre} (Falta: {', '.join(errores_render)})")
+                tareas_alberto_detalle.append(
+                    f"{nombre} (Falta: {', '.join(errores_render)})"
+                )
             else:
                 count_con_renders += 1
 
             if not tags or len(tags) == 0:
-                tareas_tomas_seo.append(f"{nombre} (Sugerencia: 3D, Streetwear, Fashion, CLO3D)")
+                tareas_tomas_seo.append(
+                    f"{nombre} (Sugerencia: 3D, Streetwear, Fashion, CLO3D)"
+                )
             else:
                 borradores_tomas.append(nombre)
 
@@ -95,16 +115,23 @@ def construir_reporte(productos, ventas_data):
         perc_alberto = 100
 
     # Porcentaje de limpieza general y renders ready
-    perc_limpieza = (count_publicados / len(productos) * 100) if len(productos) > 0 else 100
-    perc_lanzamiento = (count_con_renders / count_publicados * 100) if count_publicados > 0 else 100
+    perc_limpieza = (
+        (count_publicados / len(productos) * 100) if len(productos) > 0 else 100
+    )
+    perc_lanzamiento = (
+        (count_con_renders / count_publicados * 100) if count_publicados > 0 else 100
+    )
 
-    # Construcción del mensaje
+    # Construcción del mensaje base
     msg = f"🤖 *SISTEMA CENTRAL DE OPERACIONES: MISIÓN $10K*\n"
-    msg += f"📅 Reporte: {datetime.now().strftime('%d/%m/%Y')} | {datetime.now().strftime('%H:%M')}\n"
+    msg += (
+        f"📅 Reporte: {datetime.now().strftime('%d/%m/%Y')} | "
+        f"{datetime.now().strftime('%H:%M')}\n"
+    )
     msg += "----------------------------------\n\n"
 
     # Ganancias
-    msg += f"💰 *REPARTO DE GANANCIAS HOY:*\n"
+    msg += "💰 *REPARTO DE GANANCIAS HOY:*\n"
     if ganancia_bruta_hoy > 0:
         msg += f"💵 *Bruto:* ${ganancia_bruta_hoy:,.2f}\n"
         msg += f"👤 *Tomás (65%):* ${ganancia_tomas:,.2f}\n{generar_barra(65)}\n"
@@ -139,7 +166,10 @@ def construir_reporte(productos, ventas_data):
     msg += "\n🎨 *ALBERTO (Faltan Renders):*\n"
     if tareas_alberto_detalle:
         msg += f"Tu barra de progreso está en {generar_barra(perc_alberto)}\n"
-        msg += "Cada pack que completes con todos los renders hace subir esta barra, te queda menos 💪\n"
+        msg += (
+            "Cada pack que completes con todos los renders hace subir esta barra, "
+            "te queda menos 💪\n"
+        )
         for t in tareas_alberto_detalle[:5]:
             msg += f" • {t}\n"
     else:
@@ -160,33 +190,8 @@ def construir_reporte(productos, ventas_data):
     return msg
 
 
-def enviar_whatsapp(texto):
-    url = f"https://7103.api.greenapi.com/waInstance{ID_INSTANCE}/sendMessage/{API_TOKEN}"
-    payload = {"chatId": CHAT_ID, "message": texto}
-    headers = {"Content-Type": "application/json"}
-    requests.post(url, data=json.dumps(payload), headers=headers)
-
-
-def tarea_diaria():
-    try:
-        productos, ventas_data = obtener_datos_gumroad()
-        reporte = construir_reporte(productos, ventas_data)
-        enviar_whatsapp(reporte)
-        print("✅ Reporte diario enviado correctamente.")
-    except Exception as e:
-        print(f"❌ Error en tarea_diaria: {e}")
-
-
-# Programar de lunes a viernes a las 09:00
-schedule.every().monday.at("09:00").do(tarea_diaria)
-schedule.every().tuesday.at("09:00").do(tarea_diaria)
-schedule.every().wednesday.at("09:00").do(tarea_diaria)
-schedule.every().thursday.at("09:00").do(tarea_diaria)
-schedule.every().friday.at("09:00").do(tarea_diaria)
-
-
-if __name__ == "__main__":
-    print("⏱️ Bot de reportes Gumroad iniciado. Esperando horarios programados...")
-    while True:
-        schedule.run_pending()
-        time.sleep(30)
+def mejorar_con_ia(msg_original: str) -> str:
+    prompt = (
+        "Sos un asistente para dos creadores (Tomás y Alberto). "
+        "Tomás hace SEO y marketing, Alberto hace renders. "
+        "Mejorá este mensaje para que sea más motivador, claro y corto, "
