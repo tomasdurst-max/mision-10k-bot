@@ -16,16 +16,6 @@ def generar_barra(porcentaje, longitud=15):
     bloques = int(porcentaje / (100 / longitud))
     return "■" * bloques + "□" * (longitud - bloques) + f" {int(porcentaje)}%"
 
-def obtener_mensaje_motivador():
-    mensajes = [
-        "🚀 ¡Hoy es un gran día para subir otro render, Alberto!",
-        "📈 Tomás, el SEO de hoy es la venta de mañana. ¡Metele!",
-        "🎯 Cada día estamos más cerca de los $10K. ¡No aflojen!",
-        "🔥 El mercado 3D no duerme, ¡nosotros tampoco!",
-        "✨ ¡Misión Bucket Hat en marcha! Revisen los borradores hoy."
-    ]
-    return random.choice(mensajes)
-
 def auditoria_mision_10k():
     hoy = datetime.now()
     ayer = hoy - timedelta(days=1)
@@ -46,31 +36,24 @@ def auditoria_mision_10k():
         ranking = sorted([{"n": p.get("name", "S/N"), "v": p.get("view_count", 0)} for p in productos if p.get("published")], key=lambda x: x['v'], reverse=True)
         
         # 3. Auditoría de Tareas (Alberto/Tomás)
+        # Filtramos los que SI tienen renders y los que NO
+        con_renders = [p.get("name") for p in productos if p.get("published") and p.get("thumbnail_url") and p.get("preview_url")]
         tareas_alb = [p.get("name") for p in productos if p.get("published") and (not p.get("thumbnail_url") or not p.get("preview_url"))]
+        
         tareas_tomas = [p.get("name") for p in productos if p.get("published") and not p.get("tags")]
         borradores = [p.get("name") for p in productos if not p.get("published")]
 
-        # 4. Cálculo de Salud
+        # 4. Cálculo de Salud (Mantenemos la fórmula de 3 puntos por producto)
         puntos_max = len(productos) * 3
         puntos_hoy = sum(1 for p in productos if p.get("published"))
-        puntos_hoy += sum(1 for p in productos if p.get("published") and p.get("thumbnail_url") and p.get("preview_url"))
+        puntos_hoy += len(con_renders)
         puntos_hoy += sum(1 for p in productos if p.get("published") and p.get("tags"))
         salud = (puntos_hoy / puntos_max * 100) if puntos_max > 0 else 0
 
-        # --- LÓGICA COMPARATIVA (24h vs 48h) ---
-        hoy_str = hoy.strftime("%Y-%m-%d")
-        ayer_str = ayer.strftime("%Y-%m-%d")
-        
-        ganancia_hoy = sum(v.get("price", 0) / 100 for v in ventas_data if v.get("created_at", "").startswith(hoy_str))
-        ganancia_ayer = sum(v.get("price", 0) / 100 for v in ventas_data if v.get("created_at", "").startswith(ayer_str))
-        
-        # Comparación visual
-        if ganancia_hoy > ganancia_ayer:
-            tendencia = "📈 ¡Superamos lo de ayer!"
-        elif ganancia_hoy < ganancia_ayer and ganancia_ayer > 0:
-            tendencia = "📉 Un poco más tranquilos que ayer."
-        else:
-            tendencia = "⚖️ Manteniendo el ritmo."
+        # --- LÓGICA COMPARATIVA ---
+        ganancia_hoy = sum(v.get("price", 0) / 100 for v in ventas_data if v.get("created_at", "").startswith(hoy.strftime("%Y-%m-%d")))
+        ganancia_ayer = sum(v.get("price", 0) / 100 for v in ventas_data if v.get("created_at", "").startswith(ayer.strftime("%Y-%m-%d")))
+        tendencia = "📈 ¡Subiendo!" if ganancia_hoy >= ganancia_ayer else "⚖️ Manteniendo."
 
         # --- CONSTRUCCIÓN DEL MENSAJE ---
         icono = "🏆 " if (ranking and ranking[0]['v'] > 1000) else "🚀 "
@@ -82,25 +65,31 @@ def auditoria_mision_10k():
 
         # SECCIÓN COMPARATIVA
         msg += f"🔄 *COMPARATIVA 24H:*\n"
-        msg += f" • Hoy: ${ganancia_hoy:,.2f}\n"
-        msg += f" • Ayer: ${ganancia_ayer:,.2f}\n"
-        msg += f" *Result:* {tendencia}\n\n"
+        msg += f" • Hoy: ${ganancia_hoy:,.2f} ({tendencia})\n"
+        msg += f" • Ayer: ${ganancia_ayer:,.2f}\n\n"
 
-        msg += "🔍 *TOP 3 TENDENCIAS:* \n"
-        for i, p in enumerate(ranking[:3]):
-            emoji = "🔥" if i == 0 else "•"
-            msg += f" {emoji} {p['n']} ({p['v']} visitas)\n"
-
-        msg += f"\n🎨 *ALBERTO (Renders):*\n"
-        msg += f" • {tareas_alb[0]}\n" if tareas_alb else " ✅ ¡Renders listos!\n"
+        # TAREAS ALBERTO (Prioridad: Mínimo 5 thumbnails)
+        msg += f"🎨 *ALBERTO (Check de Miniaturas):*\n"
+        msg += f" ✅ Renders Listos: {len(con_renders)}/5\n"
         
+        if tareas_alb:
+            msg += f" ⚠️ *Pendientes (Próximos 5):*\n"
+            for t in tareas_alb[:5]: # Aquí revisa y muestra hasta 5
+                msg += f" • {t}\n"
+            if len(con_renders) < 5:
+                msg += f"\n💡 _Alberto, necesitamos al menos 5 productos con renders pro para traccionar._\n"
+        else:
+            msg += " ⭐ ¡Todos los productos tienen renders impecables!\n"
+
+        # TAREAS TOMÁS
         msg += f"\n💡 *TOMÁS (SEO/Limpieza):*\n"
         msg += f" ⚠️ {len(tareas_tomas)} sin Tags | 🧹 {len(borradores)} borradores.\n"
 
+        # REPARTO
         if ganancia_hoy > 0:
             msg += f"\n💰 *REPARTO HOY:* T: ${ganancia_hoy*0.65:,.2f} | A: ${ganancia_hoy*0.35:,.2f}\n"
 
-        msg += f"\n✨ *NOTAS:*\n{obtener_mensaje_motivador()}"
+        msg += "\n🎯 _Misión: Dominar con el Bucket Hat._"
         return msg
 
     except Exception:
@@ -109,10 +98,9 @@ def auditoria_mision_10k():
 def enviar_whatsapp(texto):
     url = f"https://api.greenapi.com/waInstance{ID_INSTANCE}/sendMessage/{API_TOKEN}"
     try:
-        r = requests.post(url, json={"chatId": CHAT_ID, "message": texto}, timeout=10)
-        print(f"Estado HTTP: {r.status_code}")
+        requests.post(url, json={"chatId": CHAT_ID, "message": texto}, timeout=10)
     except:
-        print("Error de conexión.")
+        pass
 
 if __name__ == "__main__":
     reporte = auditoria_mision_10k()
