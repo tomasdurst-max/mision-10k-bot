@@ -1,3 +1,1 @@
-requests
-schedule
-google-generativeai
+requests==2.31.0
