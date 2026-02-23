@@ -3,26 +3,25 @@ import json
 from datetime import datetime
 import os
 import random
+import traceback
 
-# --- CONFIGURACIÓN DE IDENTIFICADORES (Fijos) ---
-ID_INSTANCE = "7103524728" 
-CHAT_ID = "120363406798223965@g.us" 
+# --- CONFIGURACIÓN DE IDENTIFICADORES ---
+ID_INSTANCE = "7103524728"
+CHAT_ID = "120363406798223965@g.us"
 
-# --- SEGURIDAD (Desde Variables de Entorno) ---
+# --- SEGURIDAD ---
 GUMROAD_TOKEN = os.getenv("GUMROAD_TOKEN")
 API_TOKEN = os.getenv("API_TOKEN")
 
 def generar_barra(porcentaje, longitud=15):
-    """Genera la barra visual de progreso."""
     porcentaje = min(max(porcentaje, 0), 100)
     bloques = int(porcentaje / (100 / longitud))
     return "■" * bloques + "□" * (longitud - bloques) + f" {int(porcentaje)}%"
 
 def obtener_mensaje_viernes():
-    """Genera un mensaje de cierre de semana no genérico."""
     mensajes = [
         "🍻 ¡Se terminó la semana, cracks! Alberto, soltá el mouse. Tomás, apagá el SEO. ¡A disfrutar!",
-        "🍕 ¡Viernes! La tienda queda en piloto automático. Gran laburo, el $10K está cada vez más cerca.",
+        "🍕 ¡Viernes! La tienda queda en piloto automático. Gran laburo, el $10K está cerca.",
         "🎮 Misión cumplida. Desconecten para volver el lunes con ojos nuevos. ¡Felicidades!",
         "🚀 ¡Viernes de descontrol! El Bucket Hat ya casi es una realidad. ¡Disfruten el descanso!",
         "✨ ¡Semana liquidada con éxito! Que tengan un finde de película. ¡Nos vemos el lunes!"
@@ -34,23 +33,105 @@ def auditoria_mision_10k():
     hoy = datetime.now()
     es_viernes = hoy.weekday() == 4
     
-    # Filtro: Solo de Lunes (0) a Viernes (4)
     if hoy.weekday() > 4:
         return "SKIP: El sistema descansa el fin de semana."
 
     if not all([GUMROAD_TOKEN, API_TOKEN]):
-        return "❌ ERROR: Faltan los Tokens en la configuración de Railway/GitHub."
+        return "❌ ERROR: Faltan los Tokens en Railway (GUMROAD_TOKEN o API_TOKEN)."
 
     headers = {"Authorization": f"Bearer {GUMROAD_TOKEN}"}
     
     try:
-        # 1. Carga de datos
-        res_p = requests.get("https://api.gumroad.com/v2/products", headers=headers).json()
-        res_s = requests.get("https://api.gumroad.com/v2/sales", headers=headers).json()
+        # 1. Llamadas a la API con verificación de errores
+        p_req = requests.get("https://api.gumroad.com/v2/products", headers=headers)
+        s_req = requests.get("https://api.gumroad.com/v2/sales", headers=headers)
         
-        productos = res_p.get("products", [])
-        ventas_data = res_s.get("sales", [])
+        if p_req.status_code != 200 or s_req.status_code != 200:
+            return f"❌ Error API Gumroad: Status {p_req.status_code}. Revisá el GUMROAD_TOKEN."
+
+        productos = p_req.json().get("products", [])
+        ventas_data = s_req.json().get("sales", [])
         
-        # 2. Investigación de Tendencias y Radar Viral
+        if not productos:
+            return "⚠️ No se encontraron productos en la cuenta de Gumroad."
+
+        # 2. Investigación de Tendencias
         ranking = sorted(
-            [{"n": p.get("name"), "v": p.get
+            [{"n": p.get("name"), "v": p.get("view_count", 0)} for p in productos if p.get("published")],
+            key=lambda x: x['v'], reverse=True
+        )
+        
+        # 3. Auditoría de Tareas
+        tareas_alberto = []
+        tareas_tomas_seo = []
+        borradores_tomas = []
+        puntos_totales = 0
+        puntos_logrados = 0
+
+        for p in productos:
+            name = p.get("name")
+            puntos_totales += 3 
+            if p.get("published"):
+                puntos_logrados += 1
+                if not p.get("thumbnail_url") or not p.get("preview_url"):
+                    tareas_alberto.append(name)
+                else: puntos_logrados += 1
+                if not p.get("tags"):
+                    tareas_tomas_seo.append(name)
+                else: puntos_logrados += 1
+            else:
+                borradores_tomas.append(name)
+
+        salud_tienda = (puntos_logrados / puntos_totales * 100) if puntos_totales > 0 else 0
+        ganancia_hoy = sum(v.get("price", 0) / 100 for v in ventas_data if v.get("created_at", "").startswith(hoy.strftime("%Y-%m-%d")))
+
+        # --- RADAR VIRAL ---
+        vistas_lista = [p['v'] for p in ranking]
+        vistas_promedio = sum(vistas_lista) / len(vistas_lista) if vistas_lista else 0
+        producto_viral = ranking[0] if ranking and ranking[0]['v'] > (vistas_promedio * 2) and ranking[0]['v'] > 50 else None
+
+        # --- CONSTRUCCIÓN ---
+        logro = "🏆 " if (ranking and ranking[0]['v'] > 1000) else "🚀 "
+        msg = f"{logro}*SISTEMA CENTRAL: ESTRATEGIA $10K*\n"
+        msg += f"📅 {hoy.strftime('%d/%m/%Y')} | {'🔥 MODO VIERNES' if es_viernes else 'Status: Activo'}\n"
+        msg += "----------------------------------\n\n"
+        msg += f"📊 *SALUD DE LA TIENDA:* \n{generar_barra(salud_tienda)}\n\n"
+
+        if producto_viral:
+            msg += f"⚡ *RADAR VIRAL:* ¡{producto_viral['n']}! tiene {producto_viral['v']} visitas. ¡Aprovechen el hype!\n\n"
+
+        msg += "🔍 *TOP 3 TENDENCIAS:* \n"
+        for i, p in enumerate(ranking[:3]):
+            emoji = "🏆" if i == 0 and p['v'] > 1000 else "🔥" if i == 0 else "•"
+            msg += f" {emoji} {p['n']} ({p['v']} visitas)\n"
+
+        msg += f"\n🎨 *ALBERTO (Renders):*\n"
+        msg += f" • {tareas_alberto[0]}\n" if tareas_alberto else " ✅ ¡Renders listos!\n"
+        
+        msg += f"\n💡 *TOMÁS (Limpieza/SEO):*\n"
+        if tareas_tomas_seo: msg += f" ⚠️ {len(tareas_tomas_seo)} sin Tags.\n"
+        if borradores_tomas: msg += f" 🧹 {len(borradores_tomas)} borradores.\n"
+        if not tareas_tomas_seo and not borradores_tomas: msg += " ✅ Todo limpio.\n"
+
+        if ganancia_hoy > 0:
+            msg += f"\n💰 *REPARTO:* T: ${ganancia_hoy*0.65:,.2f} | A: ${ganancia_hoy*0.35:,.2f}\n"
+
+        msg += f"\n✨ *MODO FINDE:*\n{obtener_mensaje_viernes()}" if es_viernes else "\n🎯 _Misión: Lanzamiento del Bucket Hat._"
+        return msg
+
+    except Exception:
+        return f"❌ Error crítico en el análisis:\n{traceback.format_exc()[:200]}"
+
+def enviar_whatsapp(texto):
+    if "SKIP" in texto: return
+    url = f"https://api.greenapi.com/waInstance{ID_INSTANCE}/sendMessage/{API_TOKEN}"
+    payload = {"chatId": CHAT_ID, "message": texto}
+    try:
+        r = requests.post(url, json=payload, timeout=10)
+        print(f"Estado HTTP: {r.status_code}")
+    except:
+        print("Error de conexión con WhatsApp")
+
+if __name__ == "__main__":
+    reporte = auditoria_mision_10k()
+    enviar_whatsapp(reporte)
