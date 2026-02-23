@@ -22,78 +22,76 @@ def auditoria_mision_10k():
     headers = {"Authorization": f"Bearer {GUMROAD_TOKEN}"}
     
     try:
-        # 1. Llamada a la API
-        p_req = requests.get("https://api.gumroad.com/v2/products", headers=headers)
-        s_req = requests.get("https://api.gumroad.com/v2/sales", headers=headers)
+        # 1. Llamadas a la API con verificación de integridad
+        p_req = requests.get("https://api.gumroad.com/v2/products", headers=headers, timeout=15)
+        s_req = requests.get("https://api.gumroad.com/v2/sales", headers=headers, timeout=15)
         
+        # Validación de respuesta JSON
         if p_req.status_code != 200:
-            return f"❌ Error API Gumroad: {p_req.status_code}"
+            return f"❌ Error Gumroad (Status {p_req.status_code}): El Token podría estar vencido o la API caída."
+        
+        try:
+            productos_data = p_req.json()
+            ventas_data_raw = s_req.json()
+        except Exception:
+            return "❌ Error: Gumroad no envió datos válidos. Reintenta en unos minutos."
 
-        productos = p_req.json().get("products", [])
-        ventas_data = s_req.json().get("sales", [])
+        productos = productos_data.get("products", [])
+        ventas_data = ventas_data_raw.get("sales", [])
         
         # 2. Investigación de Tendencias
         ranking = sorted([{"n": p.get("name", "S/N"), "v": p.get("view_count", 0)} for p in productos if p.get("published")], key=lambda x: x['v'], reverse=True)
         
-        # 3. Auditoría de Tareas (Alberto/Tomás)
-        # Filtramos los que SI tienen renders y los que NO
+        # 3. Auditoría Alberto (Check de al menos 5 thumbnails)
         con_renders = [p.get("name") for p in productos if p.get("published") and p.get("thumbnail_url") and p.get("preview_url")]
         tareas_alb = [p.get("name") for p in productos if p.get("published") and (not p.get("thumbnail_url") or not p.get("preview_url"))]
         
+        # 4. Auditoría Tomás (SEO y Limpieza)
         tareas_tomas = [p.get("name") for p in productos if p.get("published") and not p.get("tags")]
         borradores = [p.get("name") for p in productos if not p.get("published")]
 
-        # 4. Cálculo de Salud (Mantenemos la fórmula de 3 puntos por producto)
+        # 5. Cálculo de Salud y Finanzas
         puntos_max = len(productos) * 3
-        puntos_hoy = sum(1 for p in productos if p.get("published"))
-        puntos_hoy += len(con_renders)
-        puntos_hoy += sum(1 for p in productos if p.get("published") and p.get("tags"))
+        puntos_hoy = sum(1 for p in productos if p.get("published")) + len(con_renders) + sum(1 for p in productos if p.get("published") and p.get("tags"))
         salud = (puntos_hoy / puntos_max * 100) if puntos_max > 0 else 0
 
-        # --- LÓGICA COMPARATIVA ---
         ganancia_hoy = sum(v.get("price", 0) / 100 for v in ventas_data if v.get("created_at", "").startswith(hoy.strftime("%Y-%m-%d")))
         ganancia_ayer = sum(v.get("price", 0) / 100 for v in ventas_data if v.get("created_at", "").startswith(ayer.strftime("%Y-%m-%d")))
-        tendencia = "📈 ¡Subiendo!" if ganancia_hoy >= ganancia_ayer else "⚖️ Manteniendo."
 
         # --- CONSTRUCCIÓN DEL MENSAJE ---
-        icono = "🏆 " if (ranking and ranking[0]['v'] > 1000) else "🚀 "
-        msg = f"{icono}*SISTEMA CENTRAL: ESTRATEGIA $10K*\n"
-        msg += f"📅 {hoy.strftime('%d/%m/%Y')} | Reporte Diario\n"
+        msg = f"🚀 *SISTEMA CENTRAL: ESTRATEGIA $10K*\n"
+        msg += f"📅 {hoy.strftime('%d/%m/%Y')} | Reporte de Control\n"
         msg += "----------------------------------\n\n"
 
         msg += f"📊 *SALUD DE LA TIENDA:* \n{generar_barra(salud)}\n\n"
 
-        # SECCIÓN COMPARATIVA
         msg += f"🔄 *COMPARATIVA 24H:*\n"
-        msg += f" • Hoy: ${ganancia_hoy:,.2f} ({tendencia})\n"
+        msg += f" • Hoy: ${ganancia_hoy:,.2f}\n"
         msg += f" • Ayer: ${ganancia_ayer:,.2f}\n\n"
 
-        # TAREAS ALBERTO (Prioridad: Mínimo 5 thumbnails)
-        msg += f"🎨 *ALBERTO (Check de Miniaturas):*\n"
-        msg += f" ✅ Renders Listos: {len(con_renders)}/5\n"
+        # SECCIÓN ALBERTO: Foco en los 5 thumbnails
+        msg += f"🎨 *ALBERTO (Check de Renders):*\n"
+        msg += f" ✅ Renders OK: {len(con_renders)}/5\n"
         
         if tareas_alb:
             msg += f" ⚠️ *Pendientes (Próximos 5):*\n"
-            for t in tareas_alb[:5]: # Aquí revisa y muestra hasta 5
+            for t in tareas_alb[:5]:
                 msg += f" • {t}\n"
-            if len(con_renders) < 5:
-                msg += f"\n💡 _Alberto, necesitamos al menos 5 productos con renders pro para traccionar._\n"
         else:
-            msg += " ⭐ ¡Todos los productos tienen renders impecables!\n"
+            msg += " ⭐ ¡Todo el catálogo tiene renders pro!\n"
 
-        # TAREAS TOMÁS
-        msg += f"\n💡 *TOMÁS (SEO/Limpieza):*\n"
+        # SECCIÓN TOMÁS
+        msg += f"\n💡 *TOMÁS (SEO & Limpieza):*\n"
         msg += f" ⚠️ {len(tareas_tomas)} sin Tags | 🧹 {len(borradores)} borradores.\n"
 
-        # REPARTO
         if ganancia_hoy > 0:
-            msg += f"\n💰 *REPARTO HOY:* T: ${ganancia_hoy*0.65:,.2f} | A: ${ganancia_hoy*0.35:,.2f}\n"
+            msg += f"\n💰 *REPARTO:* T (65%): ${ganancia_hoy*0.65:,.2f} | A (35%): ${ganancia_hoy*0.35:,.2f}\n"
 
-        msg += "\n🎯 _Misión: Dominar con el Bucket Hat._"
+        msg += "\n🎯 _Misión: Subir los 5 thumbnails para el Bucket Hat._"
         return msg
 
     except Exception:
-        return f"❌ Error Crítico:\n{traceback.format_exc()[:150]}"
+        return f"❌ Error Crítico de Conexión:\n{traceback.format_exc()[:150]}"
 
 def enviar_whatsapp(texto):
     url = f"https://api.greenapi.com/waInstance{ID_INSTANCE}/sendMessage/{API_TOKEN}"
