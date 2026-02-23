@@ -15,7 +15,9 @@ CHAT_ID = "120363406798223965@g.us"
 
 # Configurar Inteligencia Artificial
 genai.configure(api_key=GEMINI_KEY)
-model = genai.GenerativeModel('gemini-1.5-flash')
+
+# CAMBIO CLAVE: Usamos 'gemini-pro' para máxima estabilidad y evitar el error 404
+model = genai.GenerativeModel('gemini-pro')
 
 def generar_barra(porcentaje, longitud=10):
     porcentaje = max(0, min(100, porcentaje))
@@ -37,15 +39,29 @@ def auditoria_mision_10k():
         count_publicados = sum(1 for p in productos if p.get("published"))
         count_con_renders = sum(1 for p in productos if p.get("published") and p.get("thumbnail_url") and p.get("preview_url"))
 
-        # --- IA ANALIZANDO TU NEGOCIO ---
+        # --- IA ANALIZANDO TU NEGOCIO CON ESTEROIDES ---
         prompt_ia = f"""
-        Sos un estratega de moda 3D. Datos de hoy:
-        - Ventas: ${ganancia_bruta_hoy}
-        - Tienda: {count_publicados} productos.
-        - Renders: {count_con_renders}/{count_publicados}.
-        Tarea: Dale una orden táctica 'con esteroides' a Alberto para los renders de Instagram y un consejo a Tomás para escalar a $10k.
+        Sos un estratega de moda 3D de élite enfocado en ventas masivas. 
+        Datos actuales del negocio de Tomás:
+        - Ventas de hoy: ${ganancia_bruta_hoy}
+        - Total productos publicados: {count_publicados}
+        - Estado de los renders (calidad visual): {count_con_renders}/{count_publicados} listos.
+
+        TAREA:
+        1. Dale una orden táctica agresiva a Alberto sobre qué tipo de renders (streetwear, telas técnicas, etc.) priorizar para Instagram hoy.
+        2. Dale un consejo de escalabilidad a Tomás para llegar a los $10,000 USD mensuales usando IA y Facebook/Instagram.
+        Hablá con autoridad, directo y enfocado en el dinero.
         """
-        vision_ia = model.generate_content(prompt_ia).text
+        
+        # Manejo de respuesta de IA para evitar errores de JSON (Expecting value)
+        try:
+            response = model.generate_content(prompt_ia)
+            if response and response.text:
+                vision_ia = response.text
+            else:
+                vision_ia = "La IA está procesando tendencias, el consejo estratégico llegará en el próximo reporte."
+        except Exception as ia_err:
+            vision_ia = f"Cerebro en mantenimiento: {ia_err}"
 
         # --- CONSTRUCCIÓN DEL REPORTE ---
         msg = f"🤖 *SISTEMA CENTRAL POTENCIADO: MISIÓN $10K*\n"
@@ -54,17 +70,23 @@ def auditoria_mision_10k():
         msg += f"💰 *GANANCIAS HOY:* ${ganancia_bruta_hoy:,.2f}\n"
         msg += f"👤 *Tomás (65%):* ${ganancia_bruta_hoy * 0.65:,.2f}\n"
         msg += f"🎨 *Alberto (35%):* ${ganancia_bruta_hoy * 0.35:,.2f}\n\n"
-        msg += f"🚀 *Renders Ready:* {generar_barra((count_con_renders/count_publicados*100) if count_publicados > 0 else 0)}\n\n"
+        
+        porcentaje_renders = (count_con_renders / count_publicados * 100) if count_publicados > 0 else 0
+        msg += f"🚀 *Renders Ready:* {generar_barra(porcentaje_renders)}\n\n"
         msg += f"🧠 *ESTRATEGIA IA (Esteroides):*\n{vision_ia}\n"
         msg += "\n🎯 _Meta: $10,000 USD._"
         return msg
+
     except Exception as e:
-        return f"❌ Error: {e}"
+        return f"❌ Error de Sistema: {e}"
 
 def enviar_whatsapp(texto):
     url = f"https://7103.api.greenapi.com/waInstance{ID_INSTANCE}/sendMessage/{API_TOKEN}"
     payload = {"chatId": CHAT_ID, "message": texto}
-    requests.post(url, json=payload)
+    try:
+        requests.post(url, json=payload)
+    except Exception as e:
+        print(f"Error enviando WhatsApp: {e}")
 
 if __name__ == "__main__":
     reporte = auditoria_mision_10k()
