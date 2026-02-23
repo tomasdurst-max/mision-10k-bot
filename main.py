@@ -3,53 +3,52 @@ import requests
 import google.generativeai as genai
 from datetime import datetime
 
-# 1. CARGA SEGURA DE VARIABLES (Nombres exactos de tu Railway)
-# Usamos .get() para que el bot no "explote" si falta una
-GUMROAD_TOKEN = os.getenv('GUMROAD_TOKEN')
-IA_KEY = os.getenv('GOOGLE_API_KEY') # Asegurate que en Railway se llame así
-GREEN_ID = os.getenv('GREEN_API_ID')
-GREEN_TOKEN = os.getenv('GREEN_API_TOKEN')
-DESTINO = os.getenv('GROUP_ID')
+# --- CARGA FORZADA ---
+# Usamos nombres genéricos para que no haya error de 'name not defined'
+G_TOKEN = os.getenv('GUMROAD_TOKEN')
+G_KEY = os.getenv('GOOGLE_API_KEY')
+GR_ID = os.getenv('GREEN_API_ID')
+GR_TOKEN = os.getenv('GREEN_API_TOKEN')
+# TU NÚMERO (El que ya probaste que funciona en el panel)
+DESTINO = "5491156063862@c.us" 
 
-def ejecutar_auditoria():
-    print(f"[{datetime.now()}] --- INICIANDO SISTEMA 10K ---")
+def enviar_whatsapp(txt):
+    url = f"https://api.green-api.com/waInstance{GR_ID}/sendMessage/{GR_TOKEN}"
+    payload = {"chatId": DESTINO, "message": txt}
+    r = requests.post(url, json=payload)
+    return r.status_code
+
+def auditar():
+    print("--- INICIANDO TEST ---")
     
-    # Verificación de seguridad en el log
-    if not all([GUMROAD_TOKEN, IA_KEY, GREEN_ID, GREEN_TOKEN, DESTINO]):
-        print("❌ ERROR: Faltan variables en Railway. Revisá los nombres.")
+    # Test 1: ¿Llegan las variables de Railway?
+    if not all([G_TOKEN, G_KEY, GR_ID, GR_TOKEN]):
+        error_msg = f"❌ Error: Faltan variables en Railway. G_KEY: {bool(G_KEY)}"
+        print(error_msg)
+        enviar_whatsapp(error_msg)
         return
 
     try:
-        # 2. AUDITORÍA GUMROAD
-        res_gum = requests.get(f"https://api.gumroad.com/v2/products?access_token={GUMROAD_TOKEN}")
-        productos = res_gum.json().get('products', [])
-        faltantes = [p['name'] for p in productos if not p.get('thumbnail_url')]
-        ventas = sum(p.get('sales_count', 0) for p in productos)
+        # Test 2: Gumroad
+        res = requests.get(f"https://api.gumroad.com/v2/products?access_token={G_TOKEN}").json()
+        prods = res.get('products', [])
+        ventas = sum(p.get('sales_count', 0) for p in prods)
 
-        # 3. CEREBRO IA (Con paracaídas para que no tire error 404)
+        # Test 3: IA (Si falla, mandamos el reporte igual)
         try:
-            genai.configure(api_key=IA_KEY)
+            genai.configure(api_key=G_KEY)
             model = genai.GenerativeModel('gemini-1.5-flash')
-            prompt = f"CEO 3D. Analizá: {len(faltantes)} prods sin render. Ventas: {ventas}. Orden para Alberto."
-            vision_ia = model.generate_content(prompt).text
-        except Exception as e:
-            print(f"⚠️ IA en pausa: {e}")
-            vision_ia = "Alberto, el cerebro está procesando ventas. Priorizá los renders de hoy."
+            orden = model.generate_content("Dame una orden corta para mi socio Alberto para vender más.").text
+        except:
+            orden = "Alberto, el cerebro de la IA está procesando. Revisá los renders hoy."
 
-        # 4. ENVÍO A WHATSAPP
-        mensaje = (
-            f"🚀 *REPORTE MISIÓN 10K*\n"
-            f"📊 Ventas: {ventas} | 📦 Pendientes: {len(faltantes)}\n\n"
-            f"🧠 *ORDEN:* {vision_ia}\n\n"
-            f"🎯 _Sistema activo._"
-        )
-
-        url_wa = f"https://api.green-api.com/waInstance{GREEN_ID}/sendMessage/{GREEN_TOKEN}"
-        requests.post(url_wa, json={"chatId": DESTINO, "message": mensaje})
-        print("✅ ¡ÉXITO! Reporte enviado a WhatsApp.")
+        # ENVÍO FINAL
+        mensaje = f"🚀 *REPORTE BOT RAILWAY*\n💰 Ventas: {ventas}\n🧠 *IA:* {orden}"
+        status = enviar_whatsapp(mensaje)
+        print(f"Resultado envío: {status}")
 
     except Exception as e:
-        print(f"❌ ERROR CRÍTICO: {e}")
+        enviar_whatsapp(f"❌ Error en el código: {str(e)}")
 
 if __name__ == "__main__":
-    ejecutar_auditoria()
+    auditar()
