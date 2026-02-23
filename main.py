@@ -1,47 +1,34 @@
 import requests
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 import os
 import random
 import traceback
 
-# --- CONFIGURACIÓN DE IDENTIFICADORES (Fijos) ---
+# --- CONFIGURACIÓN CENTRAL ---
 ID_INSTANCE = "7103524728"
 CHAT_ID = "120363406798223965@g.us"
-
-# --- SEGURIDAD (Desde Variables de Entorno) ---
 GUMROAD_TOKEN = os.getenv("GUMROAD_TOKEN")
 API_TOKEN = os.getenv("API_TOKEN")
 
 def generar_barra(porcentaje, longitud=15):
-    """Genera la barra visual de progreso."""
     porcentaje = min(max(porcentaje, 0), 100)
     bloques = int(porcentaje / (100 / longitud))
     return "■" * bloques + "□" * (longitud - bloques) + f" {int(porcentaje)}%"
 
-def obtener_mensaje_viernes():
-    """Mensaje de cierre único para cada viernes."""
+def obtener_mensaje_motivador():
     mensajes = [
-        "🍻 ¡Se terminó la semana, cracks! Alberto, soltá el mouse. Tomás, apagá el SEO. ¡A disfrutar!",
-        "🍕 ¡Viernes! La tienda queda en piloto automático. Gran laburo, el $10K está cerca.",
-        "🎮 Misión cumplida. Desconecten para volver el lunes con ojos nuevos. ¡Felicidades!",
-        "🚀 ¡Viernes de descontrol! El Bucket Hat ya casi es una realidad. ¡Disfruten el descanso!",
-        "✨ ¡Semana liquidada con éxito! Que tengan un finde de película. ¡Nos vemos el lunes!"
+        "🚀 ¡Hoy es un gran día para subir otro render, Alberto!",
+        "📈 Tomás, el SEO de hoy es la venta de mañana. ¡Metele!",
+        "🎯 Cada día estamos más cerca de los $10K. ¡No aflojen!",
+        "🔥 El mercado 3D no duerme, ¡nosotros tampoco!",
+        "✨ ¡Misión Bucket Hat en marcha! Revisen los borradores hoy."
     ]
-    semana_actual = datetime.now().isocalendar()[1]
-    return mensajes[semana_actual % len(mensajes)]
+    return random.choice(mensajes)
 
 def auditoria_mision_10k():
     hoy = datetime.now()
-    es_viernes = hoy.weekday() == 4
-    
-    # Filtro: Solo de Lunes (0) a Viernes (4)
-    if hoy.weekday() > 4:
-        return "SKIP: El sistema descansa el fin de semana."
-
-    if not all([GUMROAD_TOKEN, API_TOKEN]):
-        return "❌ ERROR: Faltan los Tokens en Railway (GUMROAD_TOKEN o API_TOKEN)."
-
+    ayer = hoy - timedelta(days=1)
     headers = {"Authorization": f"Bearer {GUMROAD_TOKEN}"}
     
     try:
@@ -50,100 +37,79 @@ def auditoria_mision_10k():
         s_req = requests.get("https://api.gumroad.com/v2/sales", headers=headers)
         
         if p_req.status_code != 200:
-            return f"❌ Error API Gumroad: {p_req.status_code}. Revisá el GUMROAD_TOKEN."
+            return f"❌ Error API Gumroad: {p_req.status_code}"
 
         productos = p_req.json().get("products", [])
         ventas_data = s_req.json().get("sales", [])
         
         # 2. Investigación de Tendencias
-        ranking = sorted(
-            [{"nombre": p.get("name", "S/N"), "vistas": p.get("view_count", 0)} for p in productos if p.get("published")],
-            key=lambda x: x['vistas'], reverse=True
-        )
+        ranking = sorted([{"n": p.get("name", "S/N"), "v": p.get("view_count", 0)} for p in productos if p.get("published")], key=lambda x: x['v'], reverse=True)
         
-        # 3. Auditoría de Tareas (Limpieza Automática)
-        tareas_alberto = []
-        tareas_tomas_seo = []
-        borradores_tomas = []
-        puntos_totales = 0
-        puntos_logrados = 0
+        # 3. Auditoría de Tareas (Alberto/Tomás)
+        tareas_alb = [p.get("name") for p in productos if p.get("published") and (not p.get("thumbnail_url") or not p.get("preview_url"))]
+        tareas_tomas = [p.get("name") for p in productos if p.get("published") and not p.get("tags")]
+        borradores = [p.get("name") for p in productos if not p.get("published")]
 
-        for p in productos:
-            name = p.get("name", "Producto sin nombre")
-            puntos_totales += 3 
-            
-            if p.get("published"):
-                puntos_logrados += 1
-                # Check Renders (Alberto)
-                if not p.get("thumbnail_url") or not p.get("preview_url"):
-                    tareas_alberto.append(name)
-                else:
-                    puntos_logrados += 1
-                
-                # Check Tags (Tomás)
-                if not p.get("tags"):
-                    tareas_tomas_seo.append(name)
-                else:
-                    puntos_logrados += 1
-            else:
-                borradores_tomas.append(name)
+        # 4. Cálculo de Salud
+        puntos_max = len(productos) * 3
+        puntos_hoy = sum(1 for p in productos if p.get("published"))
+        puntos_hoy += sum(1 for p in productos if p.get("published") and p.get("thumbnail_url") and p.get("preview_url"))
+        puntos_hoy += sum(1 for p in productos if p.get("published") and p.get("tags"))
+        salud = (puntos_hoy / puntos_max * 100) if puntos_max > 0 else 0
 
-        salud_tienda = (puntos_logrados / puntos_totales * 100) if puntos_totales > 0 else 0
-        ganancia_hoy = sum(v.get("price", 0) / 100 for v in ventas_data if v.get("created_at", "").startswith(hoy.strftime("%Y-%m-%d")))
-
-        # --- RADAR VIRAL ---
-        vistas_lista = [p['vistas'] for p in ranking]
-        promedio = sum(vistas_lista) / len(vistas_lista) if vistas_lista else 0
-        viral = ranking[0] if ranking and ranking[0]['vistas'] > (promedio * 2) and ranking[0]['vistas'] > 50 else None
+        # --- LÓGICA COMPARATIVA (24h vs 48h) ---
+        hoy_str = hoy.strftime("%Y-%m-%d")
+        ayer_str = ayer.strftime("%Y-%m-%d")
+        
+        ganancia_hoy = sum(v.get("price", 0) / 100 for v in ventas_data if v.get("created_at", "").startswith(hoy_str))
+        ganancia_ayer = sum(v.get("price", 0) / 100 for v in ventas_data if v.get("created_at", "").startswith(ayer_str))
+        
+        # Comparación visual
+        if ganancia_hoy > ganancia_ayer:
+            tendencia = "📈 ¡Superamos lo de ayer!"
+        elif ganancia_hoy < ganancia_ayer and ganancia_ayer > 0:
+            tendencia = "📉 Un poco más tranquilos que ayer."
+        else:
+            tendencia = "⚖️ Manteniendo el ritmo."
 
         # --- CONSTRUCCIÓN DEL MENSAJE ---
-        icono_inicio = "🏆 " if (ranking and ranking[0]['vistas'] > 1000) else "🚀 "
-        msg = f"{icono_inicio}*SISTEMA CENTRAL: ESTRATEGIA $10K*\n"
-        msg += f"📅 {hoy.strftime('%d/%m/%Y')} | {'🔥 MODO VIERNES' if es_viernes else 'Status: Activo'}\n"
+        icono = "🏆 " if (ranking and ranking[0]['v'] > 1000) else "🚀 "
+        msg = f"{icono}*SISTEMA CENTRAL: ESTRATEGIA $10K*\n"
+        msg += f"📅 {hoy.strftime('%d/%m/%Y')} | Reporte Diario\n"
         msg += "----------------------------------\n\n"
 
-        msg += f"📊 *SALUD DE LA TIENDA:* \n{generar_barra(salud_tienda)}\n"
-        msg += "_Al llegar al 100%, soltamos el Bucket Hat._\n\n"
+        msg += f"📊 *SALUD DE LA TIENDA:* \n{generar_barra(salud)}\n\n"
 
-        if viral:
-            msg += f"⚡ *RADAR VIRAL:* ¡{viral['nombre']}! tiene {viral['vistas']} visitas. ¡Aprovechen el hype hoy!\n\n"
+        # SECCIÓN COMPARATIVA
+        msg += f"🔄 *COMPARATIVA 24H:*\n"
+        msg += f" • Hoy: ${ganancia_hoy:,.2f}\n"
+        msg += f" • Ayer: ${ganancia_ayer:,.2f}\n"
+        msg += f" *Result:* {tendencia}\n\n"
 
         msg += "🔍 *TOP 3 TENDENCIAS:* \n"
         for i, p in enumerate(ranking[:3]):
-            emoji = "🏆" if i == 0 and p['vistas'] > 1000 else "🔥" if i == 0 else "•"
-            msg += f" {emoji} {p['nombre']} ({p['vistas']} visitas)\n"
+            emoji = "🔥" if i == 0 else "•"
+            msg += f" {emoji} {p['n']} ({p['v']} visitas)\n"
 
-        msg += f"\n🎨 *ALBERTO (Renders Pendientes):*\n"
-        if tareas_alberto:
-            for t in tareas_alberto[:3]: msg += f" • {t}\n"
-        else:
-            msg += " ✅ ¡Todos los renders terminados!\n"
-
-        msg += f"\n💡 *TOMÁS (SEO & Limpieza):*\n"
-        if tareas_tomas_seo: msg += f" ⚠️ {len(tareas_tomas_seo)} items sin Tags.\n"
-        if borradores_tomas: msg += f" 🧹 {len(borradores_tomas)} borradores por limpiar.\n"
-        if not tareas_tomas_seo and not borradores_tomas: msg += " ✅ Tienda limpia y posicionada.\n"
+        msg += f"\n🎨 *ALBERTO (Renders):*\n"
+        msg += f" • {tareas_alb[0]}\n" if tareas_alb else " ✅ ¡Renders listos!\n"
+        
+        msg += f"\n💡 *TOMÁS (SEO/Limpieza):*\n"
+        msg += f" ⚠️ {len(tareas_tomas)} sin Tags | 🧹 {len(borradores)} borradores.\n"
 
         if ganancia_hoy > 0:
-            # Fórmula de reparto
-            msg += f"\n💰 *REPARTO:* T (65%): ${ganancia_hoy*0.65:,.2f} | A (35%): ${ganancia_hoy*0.35:,.2f}\n"
+            msg += f"\n💰 *REPARTO HOY:* T: ${ganancia_hoy*0.65:,.2f} | A: ${ganancia_hoy*0.35:,.2f}\n"
 
-        if es_viernes:
-            msg += f"\n✨ *MODO FINDE:*\n{obtener_mensaje_viernes()}"
-        else:
-            msg += "\n🎯 _Misión: Completar tareas para dominar el mercado._"
-
+        msg += f"\n✨ *NOTAS:*\n{obtener_mensaje_motivador()}"
         return msg
 
     except Exception:
         return f"❌ Error Crítico:\n{traceback.format_exc()[:150]}"
 
 def enviar_whatsapp(texto):
-    if "SKIP" in texto: return
     url = f"https://api.greenapi.com/waInstance{ID_INSTANCE}/sendMessage/{API_TOKEN}"
-    payload = {"chatId": CHAT_ID, "message": texto}
     try:
-        r = requests.post(url, json=payload, timeout=10)
+        r = requests.post(url, json={"chatId": CHAT_ID, "message": texto}, timeout=10)
         print(f"Estado HTTP: {r.status_code}")
     except:
         print("Error de conexión.")
