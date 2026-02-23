@@ -1,24 +1,33 @@
 import os
 import requests
-from google import genai
-from google.genai import types # Importante para la nueva configuración
+import google.generativeai as genai
 from datetime import datetime
 
-# --- CONFIGURACIÓN DE RAILWAY ---
+# --- VARIABLES DE RAILWAY ---
 GUMROAD_TOKEN = os.getenv('GUMROAD_TOKEN')
 GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
 GREEN_ID = os.getenv('GREEN_API_ID')
 GREEN_TOKEN = os.getenv('GREEN_API_TOKEN')
 GROUP_ID = os.getenv('GROUP_ID')
 
-# Inicializar cliente forzando la versión estable v1
-client = genai.Client(
-    api_key=GOOGLE_API_KEY,
-    http_options={'api_version': 'v1'} # ESTO arregla el error 404 de v1beta
-)
+# Configuración del motor de IA
+genai.configure(api_key=GOOGLE_API_KEY)
+
+def obtener_modelo_seguro():
+    # Probamos con los dos modelos más estables
+    for nombre_modelo in ['gemini-1.5-pro', 'gemini-1.5-flash']:
+        try:
+            model = genai.GenerativeModel(nombre_modelo)
+            # Prueba rápida de conexión
+            model.generate_content("test")
+            print(f"Cerebro activado con: {nombre_modelo}")
+            return model
+        except:
+            continue
+    return None
 
 def auditar_mision_10k():
-    print(f"[{datetime.now()}] Iniciando auditoría profesional v2026...")
+    print(f"[{datetime.now()}] Iniciando auditoría de alto nivel...")
     
     try:
         # 1. Auditoría Gumroad
@@ -29,14 +38,13 @@ def auditar_mision_10k():
         faltantes = [p['name'] for p in productos if not p.get('thumbnail_url')]
         ventas = sum(p.get('sales_count', 0) for p in productos)
 
-        # 2. Estrategia IA (Conexión Estabilizada)
-        prompt = f"CEO Streetwear 3D. Analizá: {len(faltantes)} prods sin render. Ventas: {ventas}. Orden táctica para Alberto."
-        
-        response = client.models.generate_content(
-            model="gemini-1.5-flash", 
-            contents=prompt
-        )
-        vision_ia = response.text
+        # 2. IA con Doble Chequeo de Modelo
+        brain = obtener_modelo_seguro()
+        if not brain:
+            vision_ia = "El cerebro de la IA está en modo ahorro. Alberto, revisá los renders manualmente hoy."
+        else:
+            prompt = f"CEO Streetwear 3D. Analizá: {len(faltantes)} prods sin render. Ventas: {ventas}. Orden táctica para Alberto."
+            vision_ia = brain.generate_content(prompt).text
 
         # 3. Formatear Mensaje
         total = len(productos)
@@ -44,7 +52,7 @@ def auditar_mision_10k():
         barras = "■" * (porcentaje // 10) + "□" * (10 - (porcentaje // 10))
 
         mensaje = (
-            f"🚀 *SISTEMA 10K: CONEXIÓN ESTABLE*\n"
+            f"🚀 *SISTEMA 10K: CONTROL TOTAL*\n"
             f"📅 {datetime.now().strftime('%d/%m/%Y | %H:%M')}\n"
             f"----------------------------------\n\n"
             f"📊 *Catálogo:* {barras} {porcentaje}%\n"
@@ -56,7 +64,7 @@ def auditar_mision_10k():
         # 4. Enviar a WhatsApp
         url_wa = f"https://api.green-api.com/waInstance{GREEN_ID}/sendMessage/{GREEN_TOKEN}"
         requests.post(url_wa, json={"chatId": GROUP_ID, "message": mensaje})
-        print("¡Éxito! Reporte enviado al grupo.")
+        print("¡Misión cumplida! Reporte enviado.")
 
     except Exception as e:
         print(f"Error detectado: {str(e)}")
