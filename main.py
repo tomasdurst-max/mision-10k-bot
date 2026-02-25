@@ -36,23 +36,23 @@ def auditoria_mision_10k():
             return "⚠️ El escaneo se completó pero no hay productos en la cuenta."
 
         # 2. INVESTIGACIÓN DE MERCADO (Top 3 Más Vistos)
-        # Escaneamos todo Gumroad y ordenamos por visitas
         ranking = sorted(
             [{"n": p.get("name", "S/N"), "v": p.get("view_count", 0)} for p in productos if p.get("published")],
             key=lambda x: x['v'], reverse=True
         )
         
-        # 3. AUDITORÍA ALBERTO (Check de 5 renders)
+        # 3. AUDITORÍA ALBERTO (Check de renders)
         con_renders = [p.get("name") for p in productos if p.get("published") and p.get("thumbnail_url") and p.get("preview_url")]
         tareas_alb = [p.get("name") for p in productos if p.get("published") and (not p.get("thumbnail_url") or not p.get("preview_url"))]
         
-        # 4. AUDITORÍA TOMÁS (SEO y Limpieza)
-        tareas_tomas = [p.get("name") for p in productos if p.get("published") and not p.get("tags")]
+        # 4. AUDITORÍA TOMÁS (SEO y Limpieza - ACTUALIZADA)
+        # Guardamos los nombres específicos de los productos sin tags
+        tareas_tomas_nombres = [p.get("name") for p in productos if p.get("published") and not p.get("tags")]
         borradores = [p.get("name") for p in productos if not p.get("published")]
 
         # 5. CÁLCULO DE SALUD Y FINANZAS
         puntos_max = len(productos) * 3
-        puntos_hoy = sum(1 for p in productos if p.get("published")) + len(con_renders) + sum(1 for p in productos if p.get("published") and p.get("tags"))
+        puntos_hoy = sum(1 for p in productos if p.get("published")) + len(con_renders) + (len(productos) - len(tareas_tomas_nombres))
         salud = (puntos_hoy / puntos_max * 100) if puntos_max > 0 else 0
 
         hoy_str = hoy.strftime("%Y-%m-%d")
@@ -63,7 +63,7 @@ def auditoria_mision_10k():
         # --- CONSTRUCCIÓN DEL MENSAJE ---
         icono_inicio = "🏆 " if (ranking and ranking[0]['v'] > 1000) else "🚀 "
         msg = f"{icono_inicio}*SISTEMA CENTRAL: ESTRATEGIA $10K*\n"
-        msg += f"📅 {hoy.strftime('%d/%m/%Y')} | Escaneo Diario Completo\n"
+        msg += f"📅 {hoy.strftime('%d/%m/%Y')} | Escaneo Completo\n"
         msg += "----------------------------------\n\n"
 
         msg += f"📊 *SALUD DE LA TIENDA:* \n{generar_barra(salud)}\n\n"
@@ -77,39 +77,4 @@ def auditoria_mision_10k():
 
         # SECCIÓN COMPARATIVA
         msg += f"🔄 *COMPARATIVA 24H:*\n"
-        msg += f" • Hoy: ${ganancia_hoy:,.2f}\n"
-        msg += f" • Ayer: ${ganancia_ayer:,.2f}\n\n"
-
-        # SECCIÓN ALBERTO
-        msg += f"🎨 *ALBERTO (Check de Renders):*\n"
-        msg += f" ✅ Renders OK: {len(con_renders)}/5\n"
-        if tareas_alb:
-            msg += f" ⚠️ *Pendientes (Próximos 5):*\n"
-            for t in tareas_alb[:5]:
-                msg += f" • {t}\n"
-        else:
-            msg += " ⭐ ¡Todo el catálogo tiene renders pro!\n"
-
-        # SECCIÓN TOMÁS
-        msg += f"\n💡 *TOMÁS (SEO & Limpieza):*\n"
-        msg += f" ⚠️ {len(tareas_tomas)} sin Tags | 🧹 {len(borradores)} borradores.\n"
-
-        if ganancia_hoy > 0:
-            msg += f"\n💰 *REPARTO:* T (65%): ${ganancia_hoy*0.65:,.2f} | A (35%): ${ganancia_hoy*0.35:,.2f}\n"
-
-        msg += "\n🎯 _Misión: Dominar con los 5 mejores thumbnails._"
-        return msg
-
-    except Exception:
-        return f"❌ Error Crítico en el Escaneo:\n{traceback.format_exc()[:150]}"
-
-def enviar_whatsapp(texto):
-    url = f"https://api.greenapi.com/waInstance{ID_INSTANCE}/sendMessage/{API_TOKEN}"
-    try:
-        requests.post(url, json={"chatId": CHAT_ID, "message": texto}, timeout=10)
-    except:
-        pass
-
-if __name__ == "__main__":
-    reporte = auditoria_mision_10k()
-    enviar_whatsapp(reporte)
+        msg += f" •
